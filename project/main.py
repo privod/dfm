@@ -41,7 +41,7 @@ def prop_mapper(ctrl, name, val):
     ctrl.save()
 
 
-def parse_sect(file, file_name, bar, ctrl=None):
+def parse_sect_(file, file_name, bar, ctrl=None):
     while 1 == 1:
         line = file.readline().decode('utf8').strip()
         bar.update(file.tell())
@@ -55,7 +55,7 @@ def parse_sect(file, file_name, bar, ctrl=None):
         sect = re.search('(object|inherited)\s+(\w+)\s*:\s*(\w+)', line)
         if sect:
             child = Control.create(file_name=file_name, name=sect.group(2), type=sect.group(3), parent=ctrl)
-            parse_sect(file, file_name, bar, child)
+            parse_sect_(file, file_name, bar, child)
 
 
 Control.create_table()
@@ -78,16 +78,45 @@ Control.create_table()
 #     print(res[0])
 #     print(res[1])
 
+
+re_sect = re.compile('(object|inherited)|(end)', re.IGNORECASE | re.DOTALL)
+re_title = re.compile('\s+(\w+)\s*:\s*(\w+)', re.IGNORECASE | re.DOTALL)
+
+
+def parse_prop(text, beg):
+    pass
+
+
+def parse_sect(file_name, text, pos, ctrl=None):
+    parse_prop(text, pos)
+    while True:
+        sect = re_sect.search(text, pos)
+        if sect:
+            if sect.group(1):
+                title = re_title.search(text, sect.end())
+                child = Control.create(file_name=file_name, name=title.group(1), type=title.group(2), parent=ctrl)
+                parse_sect(file_name, text, title.end(), child)
+                pos = title.end()
+            #     break
+            elif sect.group(2):
+                return
+
+
+
 with open('mt400.dfm', 'rb') as f:
     text = f.read().decode('utf8')
-    re_title = re.compile('(object|inherited)\s+(\w+)\s*:\s*(\w+)(.*?)end', re.IGNORECASE|re.DOTALL)
+    # re_title = re.compile('(object|inherited)\s+(\w+)\s*:\s*(\w+)', re.IGNORECASE|re.DOTALL)
     pos = 0
-    while True:
-        res = re_title.search(text, pos)
-        if res:
-            print(res.group(4))
-            pos = res.end()
-        else:
-            break
+    parse_sect('mt400.dfm', text, pos)
+
+
+    # while True:
+    #     res = re_sect.search(text, pos)
+    #     if res:
+    #         if
+    #         print(res.group(4))
+    #         pos = res.end()
+    #     else:
+    #         break
 
 
