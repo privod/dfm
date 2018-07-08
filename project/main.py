@@ -2,7 +2,7 @@ import os
 import os.path
 import re
 
-import regex
+# import regex
 from peewee import *
 from progressbar import ProgressBar
 
@@ -45,7 +45,7 @@ def parse_sect_(file, file_name, bar, ctrl=None):
     while 1 == 1:
         line = file.readline().decode('utf8').strip()
         bar.update(file.tell())
-        prop = re.match('(Top|Left|Height|Width|Caption)\s*=\s*\'?(\d+)\'?', line)
+        prop = re.match('(Top|Left|Height|Width|Caption)\s*=\s*\'?(.+?)\'?$', line)
         if prop:
             prop_mapper(ctrl,  prop.group(1), prop.group(2))
 
@@ -57,8 +57,6 @@ def parse_sect_(file, file_name, bar, ctrl=None):
             child = Control.create(file_name=file_name, name=sect.group(2), type=sect.group(3), parent=ctrl)
             parse_sect_(file, file_name, bar, child)
 
-
-Control.create_table()
 
 # for fname in list(filter(lambda f: re.match('mt\d+\.dfm', f), os.listdir('.'))):
 #     print(fname)
@@ -79,35 +77,67 @@ Control.create_table()
 #     print(res[1])
 
 
-re_sect = re.compile('(object|inherited)|(end)', re.IGNORECASE | re.DOTALL)
-re_title = re.compile('\s+(\w+)\s*:\s*(\w+)', re.IGNORECASE | re.DOTALL)
+class Parser:
+    re_sect = re.compile('(object|inherited)|(end)', re.IGNORECASE | re.DOTALL)
+    re_title = re.compile('\s+(\w+)\s*:\s*(\w+)', re.IGNORECASE | re.DOTALL)
+    re_prop = re.compile('(Top|Left|Height|Width|Caption)\s*=\s*(\d+|\'.+?\')', re.IGNORECASE | re.DOTALL)
+    re_prop_ = re.compile('(\w+)\s*=\s*\'?(.+?)\'?', re.IGNORECASE | re.DOTALL)
 
+    Control.create_table()
 
-def parse_prop(text, beg):
-    pass
+    def __init__(self, file_name, text):
+        self.file_name = file_name
+        self.text = text
+        self.pos = 0
 
+        self.bar = ProgressBar(maxval=os.path.getsize(self.file_name)).start()
+        self.sector()
+        self.bar.finish()
 
-def parse_sect(file_name, text, pos, ctrl=None):
-    parse_prop(text, pos)
-    while True:
-        sect = re_sect.search(text, pos)
-        if sect:
-            if sect.group(1):
-                title = re_title.search(text, sect.end())
-                child = Control.create(file_name=file_name, name=title.group(1), type=title.group(2), parent=ctrl)
-                parse_sect(file_name, text, title.end(), child)
-                pos = title.end()
-            #     break
-            elif sect.group(2):
+    def parse_prop(self, ctrl, end):
+        while self.pos < end:
+            prop = self.re_prop.search(self.text, self.pos, end)
+            if prop:
+                name = prop.group(1)
+                val = prop.group(2)
+                self.pos = prop.end()
+                if name == 'Top':
+                    ctrl.top = val
+                elif name == 'Left':
+                    ctrl.left = val
+                elif name == 'Height':
+                    ctrl.height = val
+                elif name == 'Width':
+                    ctrl.width = val
+                elif name == 'Caption':
+                    ctrl.caption = val
+                else:
+                    return
+            else:
                 return
 
+    def sector(self, ctrl=None):
+        while True:
+            sect = self.re_sect.search(self.text, self.pos)
+            if sect:
+                self.parse_prop(ctrl, sect.start())
+                if sect.group(1):
+                    title = self.re_title.search(self.text, sect.end())
+                    child = Control.create(file_name=self.file_name, name=title.group(1), type=title.group(2), parent=ctrl)
+                    self.pos = title.end()
+                    self.sector(child)
+
+                elif sect.group(2):
+                    self.pos = sect.end()
+                    self.bar.update(self.pos)
+                    return
 
 
 with open('mt400.dfm', 'rb') as f:
     text = f.read().decode('utf8')
     # re_title = re.compile('(object|inherited)\s+(\w+)\s*:\s*(\w+)', re.IGNORECASE|re.DOTALL)
     pos = 0
-    parse_sect('mt400.dfm', text, pos)
+    parser = Parser('mt400.dfm', text)
 
 
     # while True:
